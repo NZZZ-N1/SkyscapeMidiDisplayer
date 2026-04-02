@@ -1,0 +1,14 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="using:SkyscapeMidiDisplayer.Converters"
+             x:Class="SkyscapeMidiDisplayer.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <converters:TimeConverter x:Key="TimeConverter"/>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+    </Application.Styles>
+</Application>

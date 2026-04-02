@@ -1,0 +1,356 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Timers;
+using System.Threading.Tasks;
+using System.Linq;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using SkyscapeMidiDisplayer.Models;
+using SkyscapeMidiDisplayer.Services;
+
+namespace SkyscapeMidiDisplayer.ViewModels;
+
+public partial class MainViewModel : ViewModelBase
+{
+    private readonly MidiParserService _midiParser;
+    private readonly AudioService _audioService;
+    private readonly System.Timers.Timer _playbackTimer;
+    private readonly System.Timers.Timer _debounceTimer;
+    private readonly Stopwatch _stopwatch;
+    private MidiFileData? _currentMidiFile;
+    private double _pausedPosition;
+    private List<MidiNote> _sortedNotes = new();
+    private int _currentNoteIndex;
+    private double _lastPlayedTime;
+    private double _debounceTargetTime;
+    private bool _wasPlayingBeforeSeek;
+
+    public AudioService AudioService => _audioService;
+
+    [ObservableProperty] private string _title = "Skyscape MIDI Displayer";
+    [ObservableProperty] private string _statusMessage = "请选择一个MIDI文件开始";
+    [ObservableProperty] private bool _isPlaying;
+    [ObservableProperty] private bool _isFileLoaded;
+    [ObservableProperty] private double _currentTimeMs;
+    [ObservableProperty] private double _durationMs;
+    [ObservableProperty] private double _speed = 200.0;
+    [ObservableProperty] private double _playbackSpeed = 1.0;
+    [ObservableProperty] private int _minNote = 21;
+    [ObservableProperty] private int _maxNote = 108;
+    [ObservableProperty] private string _fileName = "";
+    [ObservableProperty] private int _totalNotes;
+    [ObservableProperty] private int _trackCount;
+    [ObservableProperty] private bool _isAudioEnabled = true;
+    [ObservableProperty] private double _volume = 0.8;
+    [ObservableProperty] private bool _showWatermark = true;
+
+    public ObservableCollection<MidiNote> Notes { get; } = new();
+    public ObservableCollection<MidiTrack> Tracks { get; } = new();
+
+    public double Progress
+    {
+        get => DurationMs > 0 ? CurrentTimeMs / DurationMs : 0;
+        set
+        {
+            if (DurationMs > 0)
+            {
+                var newTime = value * DurationMs;
+                
+                // 保存拖动前的播放状态
+                _wasPlayingBeforeSeek = IsPlaying;
+                
+                // 如果正在播放，暂停播放
+                if (IsPlaying)
+                {
+                    _pausedPosition = newTime;
+                    StopPlayback();
+                }
+                
+                CurrentTimeMs = newTime;
+                _pausedPosition = newTime;
+                _debounceTargetTime = newTime;
+                
+                // 重置防抖定时器
+                _debounceTimer.Stop();
+                _debounceTimer.Start();
+                
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private void OnDebounceTimerElapsed(object? sender, ElapsedEventArgs e)
+    {
+        // 在后台线程执行停止音符和重置索引的操作
+        Task.Run(() =>
+        {
+            _audioService.StopAllNotes();
+            ResetNoteIndex(_debounceTargetTime);
+            
+            // 如果拖动前正在播放，恢复播放
+            if (_wasPlayingBeforeSeek)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    Play();
+                });
+            }
+        });
+    }
+
+    public MainViewModel()
+        {
+            _midiParser = new MidiParserService();
+            _audioService = new AudioService();
+            _stopwatch = new Stopwatch();
+            _playbackTimer = new System.Timers.Timer(16);
+            _playbackTimer.Elapsed += OnPlaybackTimerElapsed;
+            
+            _debounceTimer = new System.Timers.Timer(50);
+            _debounceTimer.AutoReset = false;
+            _debounceTimer.Elapsed += OnDebounceTimerElapsed;
+            
+            var settingsService = new SettingsService();
+            var settings = settingsService.LoadSettings();
+            ShowWatermark = settings.ShowWatermark;
+            _audioService.SetSoundFont(settings.CurrentSoundFont);
+        }
+
+    [RelayCommand]
+    private async Task OpenFile(Window window)
+    {
+        var storageProvider = window.StorageProvider;
+        var files = await storageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "选择MIDI文件",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("MIDI Files") { Patterns = new[] { "*.mid", "*.midi" } },
+                new FilePickerFileType("All Files") { Patterns = new[] { "*.*" } }
+            }
+        });
+
+        if (files.Count > 0)
+        {
+            await LoadMidiFile(files[0].Path.LocalPath);
+        }
+    }
+
+    private async Task LoadMidiFile(string filePath)
+    {
+        StopPlayback();
+
+        await Task.Run(() =>
+        {
+            _currentMidiFile = _midiParser.ParseMidiFile(filePath);
+        });
+
+        if (_currentMidiFile == null)
+        {
+            StatusMessage = "无法加载MIDI文件";
+            return;
+        }
+
+        Notes.Clear();
+        Tracks.Clear();
+
+        foreach (var track in _currentMidiFile.Tracks)
+        {
+            Tracks.Add(track);
+            foreach (var note in track.Notes)
+            {
+                Notes.Add(note);
+            }
+        }
+
+        _sortedNotes = Notes.OrderBy(n => n.StartTimeMs).ToList();
+
+        DurationMs = _currentMidiFile.DurationMs;
+        MinNote = _currentMidiFile.MinNote;
+        MaxNote = _currentMidiFile.MaxNote;
+        FileName = _currentMidiFile.FileName;
+        TotalNotes = _currentMidiFile.TotalNoteCount;
+        TrackCount = _currentMidiFile.Tracks.Count;
+
+        CurrentTimeMs = 0;
+        _pausedPosition = 0;
+        _lastPlayedTime = 0;
+        _currentNoteIndex = 0;
+        IsFileLoaded = true;
+        StatusMessage = $"已加载: {FileName} ({TotalNotes} 个音符, {TrackCount} 个轨道)";
+    }
+
+    [RelayCommand]
+    private void Play()
+    {
+        if (!IsFileLoaded || IsPlaying) return;
+
+        IsPlaying = true;
+        _stopwatch.Restart();
+        _playbackTimer.Start();
+        StatusMessage = "正在播放...";
+    }
+
+    [RelayCommand]
+    private void Pause()
+    {
+        if (!IsPlaying) return;
+
+        _pausedPosition = CurrentTimeMs;
+        _audioService.StopAllNotes();
+        StopPlayback();
+        StatusMessage = "已暂停";
+    }
+
+    [RelayCommand]
+    private void Stop()
+    {
+        StopPlayback();
+        _audioService.StopAllNotes();
+        CurrentTimeMs = 0;
+        _pausedPosition = 0;
+        _currentNoteIndex = 0;
+        _lastPlayedTime = 0;
+        StatusMessage = "已停止";
+    }
+
+    private void StopPlayback()
+    {
+        _playbackTimer.Stop();
+        _stopwatch.Stop();
+        IsPlaying = false;
+    }
+
+    [RelayCommand]
+    private void Restart()
+    {
+        _audioService.StopAllNotes();
+        CurrentTimeMs = 0;
+        _pausedPosition = 0;
+        _currentNoteIndex = 0;
+        _lastPlayedTime = 0;
+        if (IsPlaying)
+        {
+            _stopwatch.Restart();
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenSettings(Window window)
+    {
+        var settingsWindow = new SettingsWindow();
+        await settingsWindow.ShowDialog(window);
+        
+        var settingsService = new SettingsService();
+        var settings = settingsService.LoadSettings();
+        ShowWatermark = settings.ShowWatermark;
+        _audioService.SetSoundFont(settings.CurrentSoundFont);
+    }
+
+    private void OnPlaybackTimerElapsed(object? sender, ElapsedEventArgs e)
+    {
+        if (_currentMidiFile == null) return;
+
+        var newPosition = _pausedPosition + _stopwatch.Elapsed.TotalMilliseconds * PlaybackSpeed;
+
+        if (newPosition >= DurationMs)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                Stop();
+                StatusMessage = "播放完成";
+            });
+            return;
+        }
+
+        if (IsAudioEnabled)
+        {
+            PlayNotesInRange(_lastPlayedTime, newPosition);
+        }
+
+        _lastPlayedTime = newPosition;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            CurrentTimeMs = newPosition;
+            OnPropertyChanged(nameof(Progress));
+        });
+    }
+
+    private void ResetNoteIndex(double time)
+    {
+        _currentNoteIndex = BinarySearchNoteIndex(time);
+        _lastPlayedTime = time;
+    }
+
+    private int BinarySearchNoteIndex(double time)
+    {
+        if (_sortedNotes.Count == 0)
+            return 0;
+
+        int left = 0;
+        int right = _sortedNotes.Count - 1;
+        int result = _sortedNotes.Count;
+
+        while (left <= right)
+        {
+            int mid = left + (right - left) / 2;
+            if (_sortedNotes[mid].StartTimeMs >= time)
+            {
+                result = mid;
+                right = mid - 1;
+            }
+            else
+            {
+                left = mid + 1;
+            }
+        }
+
+        return result;
+    }
+
+    private void PlayNotesInRange(double startTime, double endTime)
+    {
+        while (_currentNoteIndex < _sortedNotes.Count)
+        {
+            var note = _sortedNotes[_currentNoteIndex];
+            
+            if (note.StartTimeMs >= endTime)
+                break;
+
+            if (note.StartTimeMs >= startTime)
+            {
+                _audioService.PlayNote(note.NoteNumber, note.Velocity, note.DurationMs);
+            }
+
+            _currentNoteIndex++;
+        }
+    }
+
+    partial void OnPlaybackSpeedChanged(double value)
+    {
+        if (IsPlaying)
+        {
+            _pausedPosition = CurrentTimeMs;
+            _stopwatch.Restart();
+        }
+    }
+
+    partial void OnIsAudioEnabledChanged(bool value)
+    {
+        if (!value)
+        {
+            _audioService.StopAllNotes();
+        }
+    }
+
+    partial void OnVolumeChanged(double value)
+    {
+        _audioService.Volume = (float)value;
+    }
+}

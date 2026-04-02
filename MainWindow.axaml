@@ -1,0 +1,125 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:SkyscapeMidiDisplayer.ViewModels"
+        xmlns:controls="using:SkyscapeMidiDisplayer.Controls"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+        x:Class="SkyscapeMidiDisplayer.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="{Binding Title}"
+        Width="1000" Height="700"
+        MinWidth="800" MinHeight="500"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Styles>
+        <Style Selector="Button">
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style Selector="Slider">
+            <Setter Property="Height" Value="20"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.RowSpan="4"
+                   ZIndex="5"
+                   Text="Bilibili-奈盏TrAnslucEnt" 
+                   FontSize="40" 
+                   FontWeight="Bold" 
+                   Foreground="#20FFFFFF" 
+                   HorizontalAlignment="Center" 
+                   VerticalAlignment="Center" 
+                   Margin="0,-100,0,0"
+                   IsVisible="{Binding ShowWatermark}"/>
+        
+        <Border Grid.Row="0" Background="#2D2D30" Padding="10">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                <Button Content="打开MIDI文件" 
+                        Command="{Binding OpenFileCommand}"
+                        CommandParameter="{Binding $parent[Window]}"
+                        IsEnabled="{Binding !IsPlaying}"
+                        Background="#0078D4" Foreground="White"/>
+                
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" 
+                            IsVisible="{Binding IsFileLoaded}">
+                    <TextBlock Text="{Binding FileName}" VerticalAlignment="Center" 
+                               Foreground="White" FontWeight="Bold"/>
+
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5" 
+                            IsVisible="{Binding IsFileLoaded}">
+                    <Button Content="播放" Command="{Binding PlayCommand}"
+                            IsEnabled="{Binding !IsPlaying}"
+                            Background="#4CAF50" Foreground="White"/>
+                    <Button Content="暂停" Command="{Binding PauseCommand}"
+                            IsEnabled="{Binding IsPlaying}"
+                            Background="#FF9800" Foreground="White"/>
+                    <Button Content="停止" Command="{Binding StopCommand}"
+                            Background="#f44336" Foreground="White"/>
+                    <Button Content="重播" Command="{Binding RestartCommand}"
+                            Background="#2196F3" Foreground="White"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="速度:" VerticalAlignment="Center" Foreground="White"/>
+                    <Slider Minimum="0.25" Maximum="3.0" Value="{Binding PlaybackSpeed}"
+                            Width="70" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding PlaybackSpeed, StringFormat='{}{0:F1}x'}" 
+                               VerticalAlignment="Center" Foreground="White" Width="30"/>
+                    <TextBlock Text="|" VerticalAlignment="Center" Foreground="#808080"/>
+                    <TextBlock Text="音量:" VerticalAlignment="Center" Foreground="White"/>
+                    <Slider Minimum="0" Maximum="1" Value="{Binding Volume}"
+                            Width="60" VerticalAlignment="Center"/>
+                    <TextBlock Text="|" VerticalAlignment="Center" Foreground="#808080"/>
+                    <CheckBox Content="音频" IsChecked="{Binding IsAudioEnabled}"
+                              Foreground="White" VerticalAlignment="Center"/>
+                    <TextBlock Text="|" VerticalAlignment="Center" Foreground="#808080"/>
+                    <Button Content="设置" 
+                            Command="{Binding OpenSettingsCommand}"
+                            CommandParameter="{Binding $parent[Window]}"
+                            Background="#606060" Foreground="White"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Background="#1E1E1E">
+            <Grid>
+                <controls:PianoRollControl CurrentTimeMs="{Binding CurrentTimeMs}"
+                                           Speed="{Binding Speed}"
+                                           MinNote="{Binding MinNote}"
+                                           MaxNote="{Binding MaxNote}"
+                                           DurationMs="{Binding DurationMs}"
+                                           Notes="{Binding Notes}"
+                                           AudioService="{Binding AudioService}"/>
+                
+                <TextBlock Text="请打开MIDI文件开始"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           FontSize="24" Foreground="#606060"
+                           IsVisible="{Binding !IsFileLoaded}"/>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2" Background="#2D2D30" Padding="10,5"
+                IsVisible="{Binding IsFileLoaded}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding CurrentTimeMs, Converter={StaticResource TimeConverter}}"
+                           VerticalAlignment="Center" Foreground="White" Width="60"/>
+                
+                <Slider Grid.Column="1" Minimum="0" Maximum="1" 
+                        Value="{Binding Progress}" VerticalAlignment="Center"/>
+                
+                <TextBlock Grid.Column="2" 
+                           Text="{Binding DurationMs, Converter={StaticResource TimeConverter}}"
+                           VerticalAlignment="Center" Foreground="White" Width="60"/>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="3" Background="#252526" Padding="10,5">
+            <TextBlock Text="{Binding StatusMessage}" 
+                       Foreground="#CCCCCC" VerticalAlignment="Center"/>
+        </Border>
+    </Grid>
+</Window>
