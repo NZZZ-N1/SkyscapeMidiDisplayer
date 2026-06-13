@@ -8,4 +8,5 @@ public class AppSettings
     public double DefaultPlaybackSpeed { get; set; } = 1.0;
     public bool ShowWatermark { get; set; } = true;
     public string CurrentSoundFont { get; set; } = "钢琴";
+    public string BlackKeyColor { get; set; } = "黑色";
 }

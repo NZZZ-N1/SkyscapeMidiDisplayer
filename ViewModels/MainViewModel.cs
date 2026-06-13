@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using NAudio.Midi;
 using SkyscapeMidiDisplayer.Models;
 using SkyscapeMidiDisplayer.Services;
 
@@ -18,6 +19,7 @@ public partial class MainViewModel : ViewModelBase
 {
     private readonly MidiParserService _midiParser;
     private readonly AudioService _audioService;
+    private readonly MidiInputService _midiInputService;
     private readonly System.Timers.Timer _playbackTimer;
     private readonly System.Timers.Timer _debounceTimer;
     private readonly Stopwatch _stopwatch;
@@ -31,7 +33,7 @@ public partial class MainViewModel : ViewModelBase
 
     public AudioService AudioService => _audioService;
 
-    [ObservableProperty] private string _title = "Skyscape MIDI Displayer";
+    [ObservableProperty]  private string _title = "Skyscape MIDI Displayer";
     [ObservableProperty] private string _statusMessage = "请选择一个MIDI文件开始";
     [ObservableProperty] private bool _isPlaying;
     [ObservableProperty] private bool _isFileLoaded;
@@ -47,9 +49,15 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty] private bool _isAudioEnabled = true;
     [ObservableProperty] private double _volume = 0.8;
     [ObservableProperty] private bool _showWatermark = true;
+    [ObservableProperty] private string _blackKeyColor = "黑色";
+    [ObservableProperty] private bool _isMidiInputMode;
+    [ObservableProperty] private bool _isMidiInputConnected;
+    [ObservableProperty] private string? _selectedMidiInputDevice;
+    [ObservableProperty] private string _midiInputStatus = "未连接";
 
     public ObservableCollection<MidiNote> Notes { get; } = new();
     public ObservableCollection<MidiTrack> Tracks { get; } = new();
+    public ObservableCollection<string> AvailableMidiInputDevices { get; } = new();
 
     public double Progress
     {
@@ -106,6 +114,7 @@ public partial class MainViewModel : ViewModelBase
         {
             _midiParser = new MidiParserService();
             _audioService = new AudioService();
+            _midiInputService = new MidiInputService();
             _stopwatch = new Stopwatch();
             _playbackTimer = new System.Timers.Timer(16);
             _playbackTimer.Elapsed += OnPlaybackTimerElapsed;
@@ -114,10 +123,17 @@ public partial class MainViewModel : ViewModelBase
             _debounceTimer.AutoReset = false;
             _debounceTimer.Elapsed += OnDebounceTimerElapsed;
             
+            _midiInputService.NoteOnReceived += OnMidiInputNoteOn;
+            _midiInputService.NoteOffReceived += OnMidiInputNoteOff;
+            _midiInputService.ControlChangeReceived += OnMidiInputControlChange;
+            
+            RefreshAvailableMidiInputDevices();
+            
             var settingsService = new SettingsService();
             var settings = settingsService.LoadSettings();
             ShowWatermark = settings.ShowWatermark;
             _audioService.SetSoundFont(settings.CurrentSoundFont);
+            BlackKeyColor = settings.BlackKeyColor;
         }
 
     [RelayCommand]
@@ -243,13 +259,14 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task OpenSettings(Window window)
     {
-        var settingsWindow = new SettingsWindow();
+        var settingsWindow = new SettingsWindow(_midiInputService);
         await settingsWindow.ShowDialog(window);
         
         var settingsService = new SettingsService();
         var settings = settingsService.LoadSettings();
         ShowWatermark = settings.ShowWatermark;
         _audioService.SetSoundFont(settings.CurrentSoundFont);
+        BlackKeyColor = settings.BlackKeyColor;
     }
 
     private void OnPlaybackTimerElapsed(object? sender, ElapsedEventArgs e)
@@ -352,5 +369,155 @@ public partial class MainViewModel : ViewModelBase
     partial void OnVolumeChanged(double value)
     {
         _audioService.Volume = (float)value;
+    }
+
+    partial void OnIsMidiInputModeChanged(bool value)
+    {
+        if (value && !IsMidiInputConnected && SelectedMidiInputDevice != null)
+        {
+            ConnectMidiInput();
+        }
+        else if (!value && IsMidiInputConnected)
+        {
+            DisconnectMidiInput();
+        }
+        StatusMessage = value ? $"MIDI输入模式: {_midiInputService.CurrentDeviceName ?? "未连接"}" : "已退出MIDI输入模式";
+    }
+
+    partial void OnSelectedMidiInputDeviceChanged(string? value)
+    {
+        if (IsMidiInputConnected)
+        {
+            DisconnectMidiInput();
+            if (value != null && IsMidiInputMode)
+            {
+                ConnectMidiInput();
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void RefreshMidiInputDevices()
+    {
+        RefreshAvailableMidiInputDevices();
+    }
+
+    private void RefreshAvailableMidiInputDevices()
+    {
+        AvailableMidiInputDevices.Clear();
+        var devices = MidiInputService.GetAvailableDevices();
+        foreach (var device in devices)
+        {
+            AvailableMidiInputDevices.Add(device);
+        }
+    }
+
+    [RelayCommand]
+    private void ConnectMidiInput()
+    {
+        if (SelectedMidiInputDevice == null) return;
+
+        if (_midiInputService.Connect(SelectedMidiInputDevice))
+        {
+            IsMidiInputConnected = true;
+            MidiInputStatus = $"已连接: {SelectedMidiInputDevice}";
+            StatusMessage = $"MIDI输入已连接: {SelectedMidiInputDevice}";
+        }
+        else
+        {
+            IsMidiInputConnected = false;
+            MidiInputStatus = "连接失败";
+            StatusMessage = "MIDI输入连接失败";
+        }
+    }
+
+    [RelayCommand]
+    private void DisconnectMidiInput()
+    {
+        _midiInputService.Disconnect();
+        IsMidiInputConnected = false;
+        MidiInputStatus = "未连接";
+        StatusMessage = "MIDI输入已断开";
+    }
+
+    private void OnMidiInputNoteOn(object? sender, MidiNoteEventArgs e)
+    {
+        if (!IsMidiInputMode) return;
+        
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            // 使用长duration，让音符自然衰减
+            // PianoNoteProvider 会在约200ms后进入持续阶段并自然衰减
+            _audioService.PlayNote(e.NoteNumber, e.Velocity, 5000);
+        });
+    }
+
+    private void OnMidiInputNoteOff(object? sender, MidiNoteEventArgs e)
+    {
+        if (!IsMidiInputMode) return;
+        
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            // 立即停止该音符，实现真实钢琴的"按键放开即停止"效果
+            _audioService.StopNote(e.NoteNumber);
+        });
+    }
+
+    private void OnMidiInputControlChange(object? sender, MidiControlChangeEventArgs e)
+    {
+        if (!IsMidiInputMode) return;
+        
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            // 延音踏板（Sustain Pedal）- 支持多种常见 CC 编号
+            if (IsSustainPedalCC(e.Controller))
+            {
+                bool pressed = e.Value >= 64;
+                StatusMessage = pressed ? "踏板: 踩下" : "踏板: 松开";
+                _audioService.SetSustainPedal(pressed);
+            }
+            else if (e.Controller == 65) // Sostenuto Pedal
+            {
+                StatusMessage = e.Value >= 64 ? "延音踏板: 踩下" : "延音踏板: 松开";
+            }
+            else if (IsSoftPedalCC(e.Controller)) // Soft Pedal
+            {
+                bool pressed = e.Value >= 64;
+                StatusMessage = pressed ? "柔音踏板: 踩下" : "柔音踏板: 松开";
+                _audioService.SetSoftPedal(pressed);
+            }
+        });
+    }
+
+    private bool IsSustainPedalCC(int controller)
+    {
+        // 延音踏板相关的常见 CC 编号
+        // CC 64: Damper Pedal (标准延音踏板)
+        // CC 4: Foot Controller (脚踏控制器)
+        // CC 11: Expression Controller (表情控制器，某些脚踏板使用)
+        // CC 67: Soft Pedal (某些 Yamaha 键盘)
+        // CC 91: Effect 1 Depth (某些键盘的延音踏板)
+        // CC 92: Effect 2 Depth (某些键盘的延音踏板)
+        // CC 93: Effect 3 Depth (某些键盘的延音踏板)
+        // CC 94: Effect 4 Depth (某些键盘的延音踏板)
+        // CC 12: Effect Control 1 (某些脚踏板)
+        // CC 13: Effect Control 2 (某些脚踏板)
+        // CC 14: Aux Control 1 (某些脚踏板)
+        // CC 15: Aux Control 2 (某些脚踏板)
+        // CC 84: Portamento Control (某些脚踏板)
+        // CC 88: High Resolution Velocity Prefix (某些设备)
+        return controller is 64 or 4 or 11 or 67 or 91 or 92 or 93 or 94 or 12 or 13 or 14 or 15 or 84 or 88;
+    }
+
+    private bool IsSoftPedalCC(int controller)
+    {
+        // 柔音踏板相关的常见 CC 编号
+        // CC 67: Soft Pedal (标准)
+        // CC 66: Sostenuto Pedal 兼 Soft Pedal (某些键盘)
+        // CC 71: Sound Controller 1 (Brightness) - 某些设备
+        // CC 72: Sound Controller 2 (Harmonic Intensity) - 某些设备
+        // CC 73: Sound Controller 3 (Release Time) - 某些设备
+        // CC 74: Sound Controller 4 (Attack Time) - 某些设备
+        return controller is 67 or 66 or 71 or 72 or 73 or 74;
     }
 }

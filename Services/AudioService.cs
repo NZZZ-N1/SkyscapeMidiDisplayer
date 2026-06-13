@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using NAudio.Midi;
@@ -13,10 +14,15 @@ public class AudioService : IDisposable
     private readonly MixingSampleProvider _mixer;
     private readonly VolumeSampleProvider _volumeProvider;
     private readonly ConcurrentBag<ISampleProvider> _activeNotes = new();
+    private readonly ConcurrentDictionary<int, ISampleProvider> _activeNotesByKey = new();
+    private readonly ConcurrentQueue<int> _sustainedNotes = new(); // 延音踏板保持的音符队列
     private bool _disposed;
     private MidiOut? _midiOut;
     private bool _useMidiSynth;
     private readonly SoundFontManager _soundFontManager;
+    private bool _sustainPedalPressed; // 延音踏板状态
+    private bool _softPedalPressed; // 柔音踏板状态
+    private double _softPedalVolume = 1.0; // 柔音踏板音量系数
 
     private static readonly double[] NoteFrequencies = GenerateNoteFrequencies();
 
@@ -76,9 +82,33 @@ public class AudioService : IDisposable
         set => _volumeProvider.Volume = Math.Clamp(value, 0f, 1f);
     }
 
+    public void SetSustainPedal(bool pressed)
+    {
+        _sustainPedalPressed = pressed;
+        
+        if (!pressed)
+        {
+            // 松开延音踏板，停止所有被保持的音符
+            while (_sustainedNotes.TryDequeue(out var noteNumber))
+            {
+                StopNoteInternal(noteNumber);
+            }
+        }
+    }
+
+    public void SetSoftPedal(bool pressed)
+    {
+        _softPedalPressed = pressed;
+        // 柔音踏板效果：降低音量并改变音色
+        _softPedalVolume = pressed ? 0.6 : 1.0;
+    }
+
     public void PlayNote(int noteNumber, int velocity, double durationMs)
     {
         if (_disposed) return;
+
+        // 如果该音符正在播放，先停止它（带强制清理）
+        StopNote(noteNumber, true);
 
         if (_useMidiSynth && _midiOut != null)
         {
@@ -87,6 +117,61 @@ public class AudioService : IDisposable
         else
         {
             PlaySynthesizedNote(noteNumber, velocity, durationMs);
+        }
+    }
+
+    public void StopNote(int noteNumber)
+    {
+        StopNote(noteNumber, false);
+    }
+
+    public void StopNote(int noteNumber, bool forceRemove)
+    {
+        // 如果延音踏板正在踩下，且不是强制移除，将音符添加到保持队列
+        if (_sustainPedalPressed && !forceRemove)
+        {
+            // 将音符加入延音队列，但不从当前播放中移除
+            // 音符会继续播放直到踏板松开
+            _sustainedNotes.Enqueue(noteNumber);
+            return;
+        }
+
+        StopNoteInternal(noteNumber, forceRemove);
+    }
+
+    private void StopNoteInternal(int noteNumber)
+    {
+        StopNoteInternal(noteNumber, false);
+    }
+
+    private void StopNoteInternal(int noteNumber, bool forceRemove)
+    {
+        // 停止合成音符
+        if (_activeNotesByKey.TryGetValue(noteNumber, out var provider))
+        {
+            var stopMethod = provider.GetType().GetMethod("Stop");
+            if (stopMethod != null)
+            {
+                stopMethod.Invoke(provider, null);
+            }
+            
+            // 如果是强制移除（重新播放同一音符），立即清理
+            if (forceRemove)
+            {
+                _activeNotesByKey.TryRemove(noteNumber, out _);
+                _mixer.RemoveMixerInput(provider);
+            }
+            // 否则让释放效果播放完毕后自动清理
+        }
+
+        // 停止 MIDI 音符
+        if (_midiOut != null)
+        {
+            try
+            {
+                _midiOut.Send(MidiMessage.StopNote(noteNumber, 0, 1).RawData);
+            }
+            catch { }
         }
     }
 
@@ -121,6 +206,7 @@ public class AudioService : IDisposable
         var provider = _soundFontManager.CurrentSoundFont.CreateNoteProvider(frequency, volume, actualDuration, noteNumber);
         
         _activeNotes.Add(provider);
+        _activeNotesByKey[noteNumber] = provider;
         _mixer.AddMixerInput(provider);
 
         // 使用反射检查提供者是否有Finished事件
@@ -130,6 +216,10 @@ public class AudioService : IDisposable
             finishedEvent.AddEventHandler(provider, new EventHandler((s, e) =>
             {
                 _activeNotes.TryTake(out _);
+                _activeNotesByKey.TryRemove(noteNumber, out _);
+                // 注意：不要在这里调用 RemoveMixerInput
+                // MixingSampleProvider 会在 Read 返回 0 时自动移除输入
+                // 在 Read 方法内部触发事件并调用 RemoveMixerInput 会导致集合修改冲突
             }));
         }
     }
@@ -178,6 +268,9 @@ public class AudioService : IDisposable
         private double _phase;
         private double _samplePosition;
         private bool _stopped;
+        private bool _isReleasing;
+        private double _releaseStartTimeMs;
+        private double _releaseStartEnvelope;  // 保存释放开始时的包络值
 
         private double[] _partialPhases = Array.Empty<double>();
         private double[] _partialAmplitudes = Array.Empty<double>();
@@ -188,7 +281,7 @@ public class AudioService : IDisposable
         private const double AttackMs = 3;
         private const double DecayMs = 200;
         private const double SustainLevel = 0.6;
-        private const double ReleaseMs = 150;
+        private const double ReleaseMs = 250;  // 增加释放时间使尾音更明显
 
         private static readonly Random _random = new();
 
@@ -208,8 +301,14 @@ public class AudioService : IDisposable
 
         public void Stop()
         {
-            _stopped = true;
-            Finished?.Invoke(this, EventArgs.Empty);
+            // 进入快速释放阶段，而不是立即停止
+            if (!_isReleasing && !_stopped)
+            {
+                _isReleasing = true;
+                _releaseStartTimeMs = _samplePosition / WaveFormat.SampleRate * 1000;
+                // 保存释放开始时的包络值
+                _releaseStartEnvelope = GetBaseEnvelope(_releaseStartTimeMs);
+            }
         }
 
         private void InitializePartials()
@@ -276,7 +375,18 @@ public class AudioService : IDisposable
             {
                 double timeMs = _samplePosition / sampleRate * 1000;
 
-                if (timeMs >= _durationMs)
+                // 检查快速释放是否完成
+                if (_isReleasing)
+                {
+                    double releaseProgress = (timeMs - _releaseStartTimeMs) / ReleaseMs;
+                    if (releaseProgress >= 1.0)
+                    {
+                        _stopped = true;
+                        break;
+                    }
+                }
+                // 检查是否超过持续时间
+                else if (timeMs >= _durationMs)
                 {
                     _stopped = true;
                     break;
@@ -341,6 +451,18 @@ public class AudioService : IDisposable
 
         private double CalculateEnvelope(double timeMs)
         {
+            // 手动触发的快速释放阶段
+            if (_isReleasing)
+            {
+                double releaseProgress = (timeMs - _releaseStartTimeMs) / ReleaseMs;
+                releaseProgress = Math.Min(1.0, releaseProgress);
+                
+                // 使用释放开始时的包络值进行衰减，而不是当前时间的包络值
+                // 使用更缓的衰减曲线，使尾音更明显
+                double decay = Math.Pow(1 - releaseProgress, 2); // 二次曲线衰减
+                return _releaseStartEnvelope * decay;
+            }
+
             double releaseStart = _durationMs - ReleaseMs;
 
             if (releaseStart < AttackMs + DecayMs)
@@ -348,7 +470,7 @@ public class AudioService : IDisposable
                 releaseStart = Math.Max(AttackMs + DecayMs * 0.3, _durationMs * 0.6);
             }
 
-            // 释放阶段
+            // 自动释放阶段（duration结束前）
             if (timeMs >= releaseStart)
             {
                 double releaseProgress = (timeMs - releaseStart) / (_durationMs - releaseStart);
@@ -364,6 +486,26 @@ public class AudioService : IDisposable
             }
 
             // 衰减阶段 - 从峰值衰减到持续电平
+            if (timeMs < AttackMs + DecayMs)
+            {
+                double decayProgress = (timeMs - AttackMs) / DecayMs;
+                return 1.0 - (1.0 - SustainLevel) * decayProgress;
+            }
+
+            // 持续阶段
+            return SustainLevel;
+        }
+
+        private double GetBaseEnvelope(double timeMs)
+        {
+            // 计算正常的包络值（不考虑释放）
+            // 起音阶段
+            if (timeMs < AttackMs)
+            {
+                return Math.Pow(timeMs / AttackMs, 0.3);
+            }
+
+            // 衰减阶段
             if (timeMs < AttackMs + DecayMs)
             {
                 double decayProgress = (timeMs - AttackMs) / DecayMs;

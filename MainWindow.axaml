@@ -81,6 +81,25 @@
                             Command="{Binding OpenSettingsCommand}"
                             CommandParameter="{Binding $parent[Window]}"
                             Background="#606060" Foreground="White"/>
+                    <TextBlock Text="|" VerticalAlignment="Center" Foreground="#808080"/>
+                    <CheckBox Content="MIDI输入" IsChecked="{Binding IsMidiInputMode}"
+                              Foreground="White" VerticalAlignment="Center"/>
+                    <ComboBox ItemsSource="{Binding AvailableMidiInputDevices}"
+                              SelectedItem="{Binding SelectedMidiInputDevice}"
+                              Width="120" VerticalAlignment="Center"
+                              IsEnabled="{Binding !IsMidiInputConnected}"/>
+                    <Button Content="刷新" Command="{Binding RefreshMidiInputDevicesCommand}"
+                            Background="#606060" Foreground="White" Padding="6,2"
+                            IsEnabled="{Binding !IsMidiInputConnected}"/>
+                    <Button Content="连接" Command="{Binding ConnectMidiInputCommand}"
+                            Background="#0078D4" Foreground="White" Padding="6,2"
+                            IsVisible="{Binding !IsMidiInputConnected}"
+                            IsEnabled="{Binding SelectedMidiInputDevice, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                    <Button Content="断开" Command="{Binding DisconnectMidiInputCommand}"
+                            Background="#f44336" Foreground="White" Padding="6,2"
+                            IsVisible="{Binding IsMidiInputConnected}"/>
+                    <TextBlock Text="{Binding MidiInputStatus}" VerticalAlignment="Center" 
+                               Foreground="#808080" FontSize="10"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -93,7 +112,8 @@
                                            MaxNote="{Binding MaxNote}"
                                            DurationMs="{Binding DurationMs}"
                                            Notes="{Binding Notes}"
-                                           AudioService="{Binding AudioService}"/>
+                                           AudioService="{Binding AudioService}"
+                                           BlackKeyColor="{Binding BlackKeyColor}"/>
                 
                 <TextBlock Text="请打开MIDI文件开始"
                            HorizontalAlignment="Center" VerticalAlignment="Center"

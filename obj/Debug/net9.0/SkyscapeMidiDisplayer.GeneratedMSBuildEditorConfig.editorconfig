@@ -22,17 +22,20 @@ build_property.PlatformNeutralAssembly =
 build_property.EnforceExtendedAnalyzerRules = 
 build_property._SupportedPlatformList = Linux,macOS,Windows
 build_property.RootNamespace = SkyscapeMidiDisplayer
-build_property.ProjectDir = f:\Ahead_CodeProjects\SkyscapeMidiDisplayer\
+build_property.ProjectDir = F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 build_property.EffectiveAnalysisLevelStyle = 9.0
 build_property.EnableCodeStyleSeverity = 
 
-[f:/Ahead_CodeProjects/SkyscapeMidiDisplayer/App.axaml]
+[F:/Ahead_CodeProjects/SkyscapeMidiDisplayer/App.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[f:/Ahead_CodeProjects/SkyscapeMidiDisplayer/MainWindow.axaml]
+[F:/Ahead_CodeProjects/SkyscapeMidiDisplayer/MainWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[f:/Ahead_CodeProjects/SkyscapeMidiDisplayer/SettingsWindow.axaml]
+[F:/Ahead_CodeProjects/SkyscapeMidiDisplayer/MidiInputMonitorWindow.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[F:/Ahead_CodeProjects/SkyscapeMidiDisplayer/SettingsWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml

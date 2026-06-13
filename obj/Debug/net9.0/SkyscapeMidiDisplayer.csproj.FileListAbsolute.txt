@@ -1,3 +1,9 @@
+F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\SkyscapeMidiDisplayer.csproj.AssemblyReference.cache
+F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\Avalonia\Resources.Inputs.cache
+F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\Avalonia\resources
+F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\SkyscapeMidiDisplayer.GeneratedMSBuildEditorConfig.editorconfig
+F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\SkyscapeMidiDisplayer.csproj.CoreCompileInputs.cache
+F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\SkyscapeMidiDisplayer.sourcelink.json
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\bin\Debug\net9.0\Melanchall_DryWetMidi_Native32.dll
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\bin\Debug\net9.0\Melanchall_DryWetMidi_Native64.dll
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\bin\Debug\net9.0\Melanchall_DryWetMidi_Native64.dylib
@@ -69,11 +75,6 @@ F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\bin\Debug\net9.0\runtimes\osx\native
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\bin\Debug\net9.0\runtimes\win-arm64\native\libSkiaSharp.dll
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\bin\Debug\net9.0\runtimes\win-x64\native\libSkiaSharp.dll
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\bin\Debug\net9.0\runtimes\win-x86\native\libSkiaSharp.dll
-F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\SkyscapeMidiDisplayer.csproj.AssemblyReference.cache
-F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\Avalonia\Resources.Inputs.cache
-F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\Avalonia\resources
-F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\SkyscapeMidiDisplayer.GeneratedMSBuildEditorConfig.editorconfig
-F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\SkyscapeMidiDisplayer.csproj.CoreCompileInputs.cache
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\Skyscape.723D358F.Up2Date
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\SkyscapeMidiDisplayer.dll
 F:\Ahead_CodeProjects\SkyscapeMidiDisplayer\obj\Debug\net9.0\refint\SkyscapeMidiDisplayer.dll

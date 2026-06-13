@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SavingTemp xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <values>
+    <SavingPair>
+      <ID>DefaultVolume</ID>
+      <Value xsi:type="xsd:double">0.8</Value>
+    </SavingPair>
+    <SavingPair>
+      <ID>IsAudioEnabled</ID>
+      <Value xsi:type="xsd:boolean">true</Value>
+    </SavingPair>
+    <SavingPair>
+      <ID>DefaultSpeed</ID>
+      <Value xsi:type="xsd:double">200</Value>
+    </SavingPair>
+    <SavingPair>
+      <ID>DefaultPlaybackSpeed</ID>
+      <Value xsi:type="xsd:double">1</Value>
+    </SavingPair>
+    <SavingPair>
+      <ID>ShowWatermark</ID>
+      <Value xsi:type="xsd:boolean">true</Value>
+    </SavingPair>
+    <SavingPair>
+      <ID>CurrentSoundFont</ID>
+      <Value xsi:type="xsd:string">钢琴</Value>
+    </SavingPair>
+    <SavingPair>
+      <ID>BlackKeyColor</ID>
+      <Value xsi:type="xsd:string">粉色</Value>
+    </SavingPair>
+  </values>
+</SavingTemp>

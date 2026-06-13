@@ -22,7 +22,8 @@ public class SettingsService
             DefaultSpeed = pack.TryGetValue("DefaultSpeed", 200.0),
             DefaultPlaybackSpeed = pack.TryGetValue("DefaultPlaybackSpeed", 1.0),
             ShowWatermark = pack.TryGetValue("ShowWatermark", true),
-            CurrentSoundFont = pack.TryGetValue("CurrentSoundFont", "钢琴")
+            CurrentSoundFont = pack.TryGetValue("CurrentSoundFont", "钢琴"),
+            BlackKeyColor = pack.TryGetValue("BlackKeyColor", "黑色")
         };
     }
 
@@ -35,6 +36,7 @@ public class SettingsService
         pack.Add("DefaultPlaybackSpeed", settings.DefaultPlaybackSpeed);
         pack.Add("ShowWatermark", settings.ShowWatermark);
         pack.Add("CurrentSoundFont", settings.CurrentSoundFont);
+        pack.Add("BlackKeyColor", settings.BlackKeyColor);
 
         DataSaving.Save(pack, SettingsFileName);
     }

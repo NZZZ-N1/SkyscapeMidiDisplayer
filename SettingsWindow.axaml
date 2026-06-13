@@ -13,6 +13,16 @@
                         <TextBlock Text="音色:" Width="60" />
                         <ComboBox ItemsSource="{Binding AvailableSoundFonts}" SelectedItem="{Binding CurrentSoundFont}" Width="150" />
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <TextBlock Text="黑键颜色:" Width="60" />
+                        <ComboBox ItemsSource="{Binding AvailableBlackKeyColors}" SelectedItem="{Binding BlackKeyColor}" Width="150" />
+                    </StackPanel>
+                    <Border Height="1" Background="#404040" Margin="0,5"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <TextBlock Text="MIDI输入:" Width="60" />
+                        <Button Content="打开MIDI监视器" Command="{Binding OpenMidiMonitorCommand}"
+                                Background="#0078D4" Foreground="White" Padding="12,6"/>
+                    </StackPanel>
                 </StackPanel>
             </TabItem>
             <TabItem Header="鸣谢">

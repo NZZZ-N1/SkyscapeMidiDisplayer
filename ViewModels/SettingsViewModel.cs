@@ -13,15 +13,23 @@ public partial class SettingsViewModel : ViewModelBase
 {
     private readonly Window _window;
     private readonly SettingsService _settingsService;
+    private readonly MidiInputService? _midiInputService;
 
     [ObservableProperty] private bool _showWatermark = true;
     [ObservableProperty] private string _currentSoundFont = "钢琴";
     [ObservableProperty] private List<string> _availableSoundFonts = new();
+    [ObservableProperty] private string _blackKeyColor = "黑色";
+    [ObservableProperty] private List<string> _availableBlackKeyColors = new() { "黑色", "粉色" };
 
-    public SettingsViewModel(Window window)
+    public SettingsViewModel(Window window) : this(window, null)
+    {
+    }
+
+    public SettingsViewModel(Window window, MidiInputService? midiInputService)
     {
         _window = window;
         _settingsService = new SettingsService();
+        _midiInputService = midiInputService;
         LoadSettings();
         LoadAvailableSoundFonts();
     }
@@ -31,6 +39,7 @@ public partial class SettingsViewModel : ViewModelBase
         var settings = _settingsService.LoadSettings();
         ShowWatermark = settings.ShowWatermark;
         CurrentSoundFont = settings.CurrentSoundFont;
+        BlackKeyColor = settings.BlackKeyColor;
     }
 
     private void LoadAvailableSoundFonts()
@@ -45,7 +54,8 @@ public partial class SettingsViewModel : ViewModelBase
         var settings = new AppSettings
         {
             ShowWatermark = ShowWatermark,
-            CurrentSoundFont = CurrentSoundFont
+            CurrentSoundFont = CurrentSoundFont,
+            BlackKeyColor = BlackKeyColor
         };
 
         _settingsService.SaveSettings(settings);
@@ -56,5 +66,12 @@ public partial class SettingsViewModel : ViewModelBase
     private void Cancel()
     {
         _window.Close();
+    }
+
+    [RelayCommand]
+    private void OpenMidiMonitor()
+    {
+        var monitorWindow = new MidiInputMonitorWindow(_midiInputService ?? new MidiInputService());
+        monitorWindow.Show(_window);
     }
 }

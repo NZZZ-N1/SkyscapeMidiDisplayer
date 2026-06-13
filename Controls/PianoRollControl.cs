@@ -34,6 +34,9 @@ public class PianoRollControl : Control
     public static readonly StyledProperty<AudioService?> AudioServiceProperty =
         AvaloniaProperty.Register<PianoRollControl, AudioService?>(nameof(AudioService));
 
+    public static readonly StyledProperty<string> BlackKeyColorProperty =
+        AvaloniaProperty.Register<PianoRollControl, string>(nameof(BlackKeyColor), "黑色");
+
     private const double PianoKeyHeight = 60;
     private const double FadeInDistance = 80;
     private HashSet<int> _pressedNotes = new();
@@ -92,13 +95,19 @@ public class PianoRollControl : Control
         set => SetValue(AudioServiceProperty, value);
     }
 
+    public string BlackKeyColor
+    {
+        get => GetValue(BlackKeyColorProperty);
+        set => SetValue(BlackKeyColorProperty, value);
+    }
+
     private int NoteRange => MaxNote - MinNote + 1;
 
     static PianoRollControl()
     {
         AffectsRender<PianoRollControl>(
             CurrentTimeMsProperty, SpeedProperty, MinNoteProperty, 
-            MaxNoteProperty, DurationMsProperty, NotesProperty);
+            MaxNoteProperty, DurationMsProperty, NotesProperty, BlackKeyColorProperty);
     }
 
     public PianoRollControl()
@@ -161,7 +170,7 @@ public class PianoRollControl : Control
             var x = bounds.Left + i * noteWidth;
             var rect = new Rect(x, 0, noteWidth, waterfallHeight);
             var brush = isBlackKey 
-                ? new SolidColorBrush(Color.FromRgb(30, 32, 38)) 
+                ? new SolidColorBrush(Color.FromRgb(30, 32, 38))
                 : new SolidColorBrush(Color.FromRgb(38, 40, 48));
             context.FillRectangle(brush, rect);
         }
@@ -191,11 +200,11 @@ public class PianoRollControl : Control
             IBrush brush;
             if (isActive)
             {
-                brush = isBlackKey ? BlackKeyPressedBrush : WhiteKeyPressedBrush;
+                brush = isBlackKey ? GetBlackKeyBrush(true) : WhiteKeyPressedBrush;
             }
             else
             {
-                brush = isBlackKey ? BlackKeyBrush : WhiteKeyBrush;
+                brush = isBlackKey ? GetBlackKeyBrush(false) : WhiteKeyBrush;
             }
             context.FillRectangle(brush, rect);
 
@@ -326,6 +335,26 @@ public class PianoRollControl : Control
         var noteInOctave = noteNumber % 12;
         return noteInOctave == 1 || noteInOctave == 3 || noteInOctave == 6 ||
                noteInOctave == 8 || noteInOctave == 10;
+    }
+
+    private IBrush GetBlackKeyBrush(bool isPressed)
+    {
+        if (BlackKeyColor == "粉色")
+        {
+            return isPressed 
+                ? new SolidColorBrush(Color.FromRgb(255, 150, 180)) 
+                : new SolidColorBrush(Color.FromRgb(220, 100, 140));
+        }
+        return isPressed 
+            ? BlackKeyPressedBrush 
+            : BlackKeyBrush;
+    }
+
+    private IBrush GetBlackKeyBackgroundBrush()
+    {
+        return BlackKeyColor == "粉色" 
+            ? new SolidColorBrush(Color.FromRgb(45, 30, 40)) 
+            : new SolidColorBrush(Color.FromRgb(30, 32, 38));
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
